@@ -1,0 +1,263 @@
+---
+# Main Ansible Playbook for Django Channels Chat Deployment
+
+- name: Configure and Deploy Django Channels Chat Application
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    app_name: "django-channels-chat"
+    app_user: "django"
+    app_dir: "/opt/{{ app_name }}"
+    docker_compose_version: "2.23.0"
+    kubectl_version: "1.28.0"
+
+  tasks:
+    - name: Include environment-specific variables
+      include_vars: "vars/{{ env }}.yml"
+      when: env is defined
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install required system packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - python3
+          - python3-pip
+          - git
+          - unzip
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add application user
+      user:
+        name: "{{ app_user }}"
+        shell: /bin/bash
+        groups: docker
+        append: yes
+        create_home: yes
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+
+    - name: Install AWS CLI
+      shell: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+        unzip -o /tmp/awscliv2.zip -d /tmp
+        /tmp/aws/install --update
+        rm -rf /tmp/awscliv2.zip /tmp/aws
+      args:
+        creates: /usr/local/bin/aws
+
+    - name: Install kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/v{{ kubectl_version }}/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+
+    - name: Install Python dependencies for Ansible
+      pip:
+        name:
+          - docker
+          - boto3
+          - botocore
+        state: present
+
+# Deploy application using Docker Compose
+- name: Deploy Application with Docker Compose
+  hosts: docker_hosts
+  become: yes
+  become_user: "{{ app_user | default('django') }}"
+
+  vars:
+    app_name: "django-channels-chat"
+    app_dir: "/opt/{{ app_name }}"
+
+  tasks:
+    - name: Clone/Update application repository
+      git:
+        repo: "{{ git_repo_url }}"
+        dest: "{{ app_dir }}"
+        version: "{{ git_branch | default('main') }}"
+        force: yes
+      when: git_repo_url is defined
+
+    - name: Copy environment file
+      template:
+        src: templates/env.j2
+        dest: "{{ app_dir }}/.env"
+        mode: "0600"
+
+    - name: Pull latest Docker images
+      community.docker.docker_compose:
+        project_src: "{{ app_dir }}"
+        pull: yes
+      when: docker_deploy | default(true)
+
+    - name: Start application with Docker Compose
+      community.docker.docker_compose:
+        project_src: "{{ app_dir }}"
+        state: present
+        recreate: always
+      when: docker_deploy | default(true)
+
+    - name: Wait for application to be healthy
+      uri:
+        url: "http://localhost:8000/chat/"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+      when: docker_deploy | default(true)
+
+# Configure Kubernetes deployment
+- name: Deploy Application to Kubernetes
+  hosts: k8s_masters
+  become: yes
+
+  vars:
+    app_name: "django-channels-chat"
+    k8s_manifests_dir: "/tmp/k8s-manifests"
+
+  tasks:
+    - name: Create Kubernetes manifests directory
+      file:
+        path: "{{ k8s_manifests_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy Kubernetes manifests
+      copy:
+        src: "../k8s/"
+        dest: "{{ k8s_manifests_dir }}/"
+        mode: "0644"
+      when: k8s_deploy | default(false)
+
+    - name: Create Kubernetes namespace
+      kubernetes.core.k8s:
+        name: "{{ k8s_namespace | default('django-chat') }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+      when: k8s_deploy | default(false)
+
+    - name: Create Kubernetes secrets
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: django-secrets
+            namespace: "{{ k8s_namespace | default('django-chat') }}"
+          type: Opaque
+          stringData:
+            DJANGO_SECRET_KEY: "{{ django_secret_key }}"
+            POSTGRES_PASSWORD: "{{ postgres_password }}"
+            POSTGRES_USER: "{{ postgres_user }}"
+            POSTGRES_DB: "{{ postgres_db }}"
+      when: k8s_deploy | default(false)
+
+    - name: Apply ConfigMap
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_dir }}/configmap.yaml"
+        namespace: "{{ k8s_namespace | default('django-chat') }}"
+      when: k8s_deploy | default(false)
+
+    - name: Apply Deployments
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_dir }}/deployment.yaml"
+        namespace: "{{ k8s_namespace | default('django-chat') }}"
+      when: k8s_deploy | default(false)
+
+    - name: Apply Services
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_manifests_dir }}/service.yaml"
+        namespace: "{{ k8s_namespace | default('django-chat') }}"
+      when: k8s_deploy | default(false)
+
+    - name: Wait for deployment to be ready
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        name: django-chat
+        namespace: "{{ k8s_namespace | default('django-chat') }}"
+        wait: yes
+        wait_timeout: 300
+      when: k8s_deploy | default(false)
+
+# Configure monitoring
+- name: Setup Monitoring Stack
+  hosts: monitoring
+  become: yes
+
+  tasks:
+    - name: Create monitoring directory
+      file:
+        path: /opt/monitoring
+        state: directory
+        mode: "0755"
+
+    - name: Copy monitoring configurations
+      copy:
+        src: "../monitoring/"
+        dest: "/opt/monitoring/"
+        mode: "0644"
+
+    - name: Start monitoring stack
+      community.docker.docker_compose:
+        project_src: /opt/monitoring
+        state: present
+      when: monitoring_enabled | default(false)

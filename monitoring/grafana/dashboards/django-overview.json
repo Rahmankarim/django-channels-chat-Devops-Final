@@ -1,0 +1,78 @@
+{
+  "dashboard": {
+    "title": "Django Channels Chat - Application Overview",
+    "uid": "django-chat-overview",
+    "tags": ["django", "application"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"django-chat\"}[5m])",
+            "legendFormat": "{{ method }} {{ path }}"
+          }
+        ]
+      },
+      {
+        "title": "Response Time (95th percentile)",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"django-chat\"}[5m]))",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "title": "HTTP Status Codes",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum by(status) (rate(http_requests_total{job=\"django-chat\"}[5m]))",
+            "legendFormat": "{{ status }}"
+          }
+        ]
+      },
+      {
+        "title": "Active WebSocket Connections",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "websocket_connections_active{job=\"django-chat\"}"
+          }
+        ]
+      },
+      {
+        "title": "Memory Usage",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "process_resident_memory_bytes{job=\"django-chat\"}",
+            "legendFormat": "Memory"
+          }
+        ]
+      },
+      {
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"django-chat\"}[5m])",
+            "legendFormat": "CPU"
+          }
+        ]
+      }
+    ]
+  }
+}

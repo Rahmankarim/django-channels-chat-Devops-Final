@@ -1,0 +1,86 @@
+{
+  "dashboard": {
+    "title": "Django Channels Chat - Database & Redis Metrics",
+    "uid": "django-chat-database",
+    "tags": ["database", "redis"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "title": "PostgreSQL Active Connections",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends{job=\"postgres\"}",
+            "legendFormat": "{{ datname }}"
+          }
+        ]
+      },
+      {
+        "title": "Database Transaction Rate",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_xact_commit{job=\"postgres\"}[5m])",
+            "legendFormat": "Commits"
+          },
+          {
+            "expr": "rate(pg_stat_database_xact_rollback{job=\"postgres\"}[5m])",
+            "legendFormat": "Rollbacks"
+          }
+        ]
+      },
+      {
+        "title": "Redis Memory Usage",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes{job=\"redis\"}",
+            "legendFormat": "Used Memory"
+          },
+          {
+            "expr": "redis_memory_max_bytes{job=\"redis\"}",
+            "legendFormat": "Max Memory"
+          }
+        ]
+      },
+      {
+        "title": "Redis Hit Rate",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(redis_keyspace_hits_total{job=\"redis\"}[5m]) / (rate(redis_keyspace_hits_total{job=\"redis\"}[5m]) + rate(redis_keyspace_misses_total{job=\"redis\"}[5m]))",
+            "legendFormat": "Hit Rate"
+          }
+        ]
+      },
+      {
+        "title": "Redis Connected Clients",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "redis_connected_clients{job=\"redis\"}"
+          }
+        ]
+      },
+      {
+        "title": "Redis Operations/sec",
+        "type": "graph",
+        "gridPos": { "x": 6, "y": 16, "w": 18, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(redis_commands_processed_total{job=\"redis\"}[5m])",
+            "legendFormat": "Commands/sec"
+          }
+        ]
+      }
+    ]
+  }
+}

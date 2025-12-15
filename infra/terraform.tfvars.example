@@ -1,0 +1,29 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and update with your values
+
+aws_region = "us-east-1"
+environment = "dev"
+project_name = "django-channels-chat"
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+availability_zones_count = 2
+
+# Database Configuration
+db_instance_class = "db.t3.micro"
+db_name = "channels_chat"
+db_username = "dbadmin"
+db_password = "CHANGE_ME_SECURE_PASSWORD"  # Use AWS Secrets Manager in production
+
+# Redis Configuration
+redis_node_type = "cache.t3.micro"
+
+# EKS Configuration
+eks_cluster_name = "django-chat-cluster"
+eks_node_instance_types = ["t3.medium"]
+eks_desired_size = 2
+eks_min_size = 1
+eks_max_size = 4
+
+# Security
+allowed_cidr_blocks = ["0.0.0.0/0"]  # Restrict this in production!

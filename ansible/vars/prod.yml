@@ -1,0 +1,39 @@
+---
+# Production environment variables
+
+env: prod
+django_debug: false
+django_allowed_hosts: "yourdomain.com,www.yourdomain.com"
+
+# Database configuration (use AWS RDS endpoints from Terraform)
+postgres_host: "{{ lookup('env', 'RDS_ENDPOINT') }}"
+postgres_port: 5432
+postgres_db: channels_chat_prod
+postgres_user: "{{ lookup('env', 'DB_USER') }}"
+postgres_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+
+# Redis configuration (use AWS ElastiCache endpoints)
+redis_host: "{{ lookup('env', 'REDIS_ENDPOINT') }}"
+redis_port: 6379
+
+# Application configuration
+app_port: 8000
+worker_processes: 4
+
+# Docker configuration
+docker_deploy: false
+docker_registry: your-ecr-registry.amazonaws.com
+docker_image_tag: "{{ lookup('env', 'IMAGE_TAG', default='latest') }}"
+
+# Kubernetes configuration (for EKS)
+k8s_deploy: true
+k8s_namespace: django-chat-prod
+k8s_replicas: 3
+
+# Monitoring
+monitoring_enabled: true
+grafana_password: "{{ lookup('env', 'GRAFANA_PASSWORD') }}"
+
+# SSL/TLS
+ssl_enabled: true
+cert_email: admin@yourdomain.com

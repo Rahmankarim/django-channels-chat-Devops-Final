@@ -1,0 +1,195 @@
+groups:
+  - name: django_alerts
+    interval: 30s
+    rules:
+      # Application is down
+      - alert: DjangoAppDown
+        expr: up{job="django-chat"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Django application is down"
+          description: "Django Chat application has been down for more than 2 minutes."
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is above 2 seconds for more than 5 minutes."
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP error rate"
+          description: "More than 5% of requests are returning 5xx errors."
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="django-chat"}[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for more than 10 minutes."
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes{job="django-chat"} > 500000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 500MB for more than 5 minutes."
+
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute."
+
+      # High database connections
+      - alert: HighDatabaseConnections
+        expr: pg_stat_database_numbackends > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connection count"
+          description: "Number of database connections is above 80 for more than 5 minutes."
+
+      # Slow queries
+      - alert: SlowQueries
+        expr: rate(pg_stat_statements_mean_time_seconds[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query time is above 1 second."
+
+  - name: redis_alerts
+    interval: 30s
+    rules:
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache has been down for more than 1 minute."
+
+      # High memory usage
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis is using more than 90% of allocated memory."
+
+      # High hit rate
+      - alert: RedisLowHitRate
+        expr: rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m])) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis low cache hit rate"
+          description: "Redis cache hit rate is below 70%."
+
+  - name: kubernetes_alerts
+    interval: 30s
+    rules:
+      # Pod not ready
+      - alert: PodNotReady
+        expr: kube_pod_status_ready{condition="false",namespace="django-chat"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod not ready"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is not ready for more than 5 minutes."
+
+      # Deployment replicas mismatch
+      - alert: DeploymentReplicasMismatch
+        expr: kube_deployment_spec_replicas{namespace="django-chat"} != kube_deployment_status_replicas_available{namespace="django-chat"}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deployment replicas mismatch"
+          description: "Deployment {{ $labels.deployment }} has a mismatch between desired and available replicas."
+
+      # High pod restart rate
+      - alert: HighPodRestartRate
+        expr: rate(kube_pod_container_status_restarts_total{namespace="django-chat"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High pod restart rate"
+          description: "Pod {{ $labels.pod }} is restarting frequently."
+
+  - name: node_alerts
+    interval: 30s
+    rules:
+      # Node down
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node is down"
+          description: "Node {{ $labels.instance }} has been down for more than 2 minutes."
+
+      # High CPU usage
+      - alert: HighNodeCPU
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High node CPU usage"
+          description: "CPU usage on node {{ $labels.instance }} is above 80%."
+
+      # High memory usage
+      - alert: HighNodeMemory
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High node memory usage"
+          description: "Memory usage on node {{ $labels.instance }} is above 85%."
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes * 100) < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space on {{ $labels.instance }} is below 15%."

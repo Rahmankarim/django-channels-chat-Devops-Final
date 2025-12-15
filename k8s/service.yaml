@@ -1,0 +1,76 @@
+---
+# ClusterIP Service for internal communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-chat
+  namespace: django-chat
+  labels:
+    app: django-chat
+spec:
+  type: ClusterIP
+  selector:
+    app: django-chat
+    tier: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800 # 3 hours for WebSocket connections
+---
+# LoadBalancer Service (for cloud providers)
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-chat-lb
+  namespace: django-chat
+  labels:
+    app: django-chat
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb" # Network Load Balancer
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    # SSL certificate annotation (optional)
+    # service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:region:account-id:certificate/certificate-id"
+    # service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+spec:
+  type: LoadBalancer
+  selector:
+    app: django-chat
+    tier: backend
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  # - port: 443
+  #   targetPort: 8000
+  #   protocol: TCP
+  #   name: https
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+---
+# Headless Service for StatefulSet (if using StatefulSet in future)
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-chat-headless
+  namespace: django-chat
+  labels:
+    app: django-chat
+spec:
+  clusterIP: None
+  selector:
+    app: django-chat
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http

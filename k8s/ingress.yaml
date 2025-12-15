@@ -1,0 +1,71 @@
+---
+# Ingress for HTTP/HTTPS routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: django-chat-ingress
+  namespace: django-chat
+  annotations:
+    # AWS ALB Ingress Controller annotations
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    # Certificate Manager
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:region:account-id:certificate/certificate-id
+
+    # Health check
+    alb.ingress.kubernetes.io/healthcheck-path: /chat/
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # WebSocket support
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=3600
+
+    # Tags
+    alb.ingress.kubernetes.io/tags: Environment=production,Project=django-channels-chat
+
+    # NGINX Ingress annotations (alternative)
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: chat.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: django-chat
+                port:
+                  number: 8000
+  tls:
+    - hosts:
+        - chat.yourdomain.com
+      secretName: django-chat-tls
+---
+# Certificate (if using cert-manager)
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: django-chat-cert
+#   namespace: django-chat
+# spec:
+#   secretName: django-chat-tls
+#   issuerRef:
+#     name: letsencrypt-prod
+#     kind: ClusterIssuer
+#   commonName: chat.yourdomain.com
+#   dnsNames:
+#   - chat.yourdomain.com
+#   - www.chat.yourdomain.com

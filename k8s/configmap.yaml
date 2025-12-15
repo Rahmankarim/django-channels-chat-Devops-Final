@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: django-config
+  namespace: django-chat
+data:
+  # Django Configuration
+  DJANGO_DEBUG: "False"
+  DJANGO_ALLOWED_HOSTS: "*" # Update with actual domain
+
+  # Database Configuration (use RDS endpoint from Terraform)
+  POSTGRES_HOST: "django-chat-db-prod.xxxxx.us-east-1.rds.amazonaws.com"
+  POSTGRES_PORT: "5432"
+
+  # Redis Configuration (use ElastiCache endpoint from Terraform)
+  REDIS_HOST: "django-chat-redis-prod.xxxxx.cache.amazonaws.com"
+  REDIS_PORT: "6379"
+
+  # Application Configuration
+  APP_PORT: "8000"
+  WORKERS: "4"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: django-config
+  namespace: django-chat-dev
+data:
+  # Django Configuration
+  DJANGO_DEBUG: "True"
+  DJANGO_ALLOWED_HOSTS: "*"
+
+  # Database Configuration (using in-cluster postgres for dev)
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+
+  # Redis Configuration (using in-cluster redis for dev)
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+
+  # Application Configuration
+  APP_PORT: "8000"
+  WORKERS: "2"
+
+  # Logging
+  LOG_LEVEL: "DEBUG"

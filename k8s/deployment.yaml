@@ -1,0 +1,235 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-chat
+  namespace: django-chat
+  labels:
+    app: django-chat
+    tier: backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: django-chat
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: django-chat
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: django-chat-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      initContainers:
+        # Database migration init container
+        - name: db-migration
+          image: your-registry/django-channels-chat:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              cd /app/canal && \
+              python manage.py migrate --noinput && \
+              python manage.py collectstatic --noinput
+          env:
+            - name: DJANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: DJANGO_SECRET_KEY
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: POSTGRES_PASSWORD
+          envFrom:
+            - configMapRef:
+                name: django-config
+
+      containers:
+        - name: django-chat
+          image: your-registry/django-channels-chat:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+
+          env:
+            - name: DJANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: DJANGO_SECRET_KEY
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: POSTGRES_PASSWORD
+          envFrom:
+            - configMapRef:
+                name: django-config
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          livenessProbe:
+            httpGet:
+              path: /chat/
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /chat/
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+            - name: media-files
+              mountPath: /app/mediafiles
+
+      volumes:
+        - name: static-files
+          emptyDir: {}
+        - name: media-files
+          persistentVolumeClaim:
+            claimName: media-pvc
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - django-chat
+                topologyKey: kubernetes.io/hostname
+---
+# PersistentVolumeClaim for media files
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-pvc
+  namespace: django-chat
+spec:
+  accessModes:
+    - ReadWriteMany # Multiple pods need access
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: efs-sc # Use EFS for multi-AZ access
+---
+# ServiceAccount for the application
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: django-chat-sa
+  namespace: django-chat
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/django-chat-eks-role
+---
+# HorizontalPodAutoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: django-chat-hpa
+  namespace: django-chat
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: django-chat
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 15
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 2
+          periodSeconds: 15
+      selectPolicy: Max
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: django-chat-pdb
+  namespace: django-chat
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: django-chat
