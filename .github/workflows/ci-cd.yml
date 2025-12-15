@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE: rahmankarim/django-channels-chat
+  DOCKER_IMAGE: rahmankarim1/django-channels-chat
   DOCKER_TAG: ${{ github.sha }}
   AWS_REGION: us-east-1
   EKS_CLUSTER_NAME: django-chat-cluster
@@ -488,13 +488,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [smoke-tests]
     if: always()
-
+    
     steps:
       - name: Send Slack notification
-        uses: slackapi/slack-github-action@v1
-        if: always()
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.24.0
         with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           payload: |
             {
               "text": "Deployment ${{ job.status }}: ${{ github.repository }}",
@@ -508,6 +507,9 @@ jobs:
                 }
               ]
             }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         continue-on-error: true
 
       - name: Summary

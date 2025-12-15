@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE: rahmankarim/django-channels-chat
+  DOCKER_IMAGE: rahmankarim1/django-channels-chat
   DOCKER_TAG: ${{ github.sha }}
 
 jobs:
