@@ -375,7 +375,6 @@ jobs:
             -e "env=prod" \
             -e "docker_image_tag=${{ env.DOCKER_TAG }}" \
             -e "k8s_deploy=true"
-        continue-on-error: true
 
   # ====================
   # Stage 6: Kubernetes Deployment
