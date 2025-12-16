@@ -36,6 +36,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: "requirements/development.txt"
 
       - name: Install dependencies
         run: |
@@ -118,8 +119,7 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: "3.11"
-          cache: "pip"
-
+          cache: "pip"          cache-dependency-path: "requirements/live.txt"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
